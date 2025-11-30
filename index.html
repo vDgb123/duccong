@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đức cống,Unfake Engine 5</title>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #333;
+            overflow: hidden;
+            font-family: 'VT323', monospace;
+            user-select: none;
+            touch-action: none;
+        }
+        #gameCanvas {
+            border: 2px solid #fff;
+            background-color: #444;
+            image-rendering: pixelated;
+        }
+        #titleScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-family: 'VT323', monospace; 
+            font-size: 30px; 
+            text-align: center;
+            z-index: 100;
+            line-height: 1.2;
+        }
+        #titleScreen button {
+            padding: 8px 16px;
+            font-size: 20px;
+            cursor: pointer;
+            margin-top: 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-family: 'VT323', monospace;
+        }
+        #titleScreen h1 {
+            font-size: 50px; 
+            margin-bottom: 10px;
+        }
+        #titleScreen p {
+            font-size: 20px;
+            margin: 5px 0;
+        }
+
+        #joystickContainer {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 120px;
+            height: 120px;
+            background-color: rgba(100, 100, 100, 0.5);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            display: none; 
+        }
+        #joystick {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(200, 200, 200, 0.7);
+            border-radius: 50%;
+            position: absolute;
+            cursor: grab;
+        }
+        
+        #fireButton {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            width: 80px;
+            height: 80px;
+            background-color: rgba(255, 0, 0, 0.7);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-family: 'VT323', monospace;
+            font-size: 24px;
+            z-index: 10;
+            cursor: pointer;
+            display: none; 
+        }
+
+        @media (max-width: 850px) {
+            #joystickContainer, #fireButton {
+                display: flex;
+            }
+        }
+
+        #deathScreen {
+            position: fixed; 
+            top: 0;
+            left: 0;
+            width: 100vw; 
+            height: 100vh;
+            
+            background-color: black;
+            background-size: cover; 
+            background-position: center;
+            
+            display: none; 
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            
+            z-index: 200; 
+        }
+        
+    </style>
+</head>
+<body>
+
+<div id="titleScreen">
+    <h1>Unfake Engine 36</h1>
+    <p class="desktop-controls">Move: WASD, Aim & Shoot: Mouse click and drag</p>
+    <p class="mobile-controls">Move: Joystick, Aim & Shoot: Fire Button</p>
+    <p>Objective: Catch 30 shit piles in 30 seconds!</p> 
+    <button onclick="startGame()">Start Game</button>
+</div>
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<div id="joystickContainer">
+    <div id="joystick"></div>
+</div>
+<div id="fireButton">
+    FIRE
+</div>
+
+<div id="deathScreen"></div>
+
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const deathScreen = document.getElementById('deathScreen');
+    
+    ctx.font = '24px "VT323", monospace';
+    ctx.fillStyle = 'white';
+
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 600;
+    const PLAYER_RADIUS = 20; 
+    const PLAYER_SPEED = 4; 
+    const PLAYER_MAX_HEALTH = 1; 
+    const BULLET_RADIUS = 3;
+    const BULLET_SPEED = 8;
+    const FIRING_COOLDOWN = 10; 
+
+    const GHOST_RADIUS = 15; 
+    const GHOST_SPEED = 2.5; 
+    const GHOST_SPAWN_INTERVAL = 30; 
+    const GHOST_HEALTH = 1; 
+    const GHOST_TOUCH_DAMAGE = 1; 
+
+    const TARGET_SCORE = 30;
+    const TIME_LIMIT = 30; 
+    const TIME_LIMIT_FRAMES = TIME_LIMIT * 60; 
+
+    const backgroundImage = new Image();
+    backgroundImage.src = 'background.jpg'; 
+    let isBackgroundLoaded = false;
+    
+    backgroundImage.onload = () => {
+        isBackgroundLoaded = true;
+    };
+    backgroundImage.onerror = () => {
+        isBackgroundLoaded = false; 
+        console.error("Lỗi khi tải ảnh background.jpg. Sẽ dùng màu nền mặc định.");
+    };
+
+    const deathImage = new Image();
+    deathImage.src = 'bach.jpeg'; 
+    let isDeathImageLoaded = false;
+    deathImage.onload = () => {
+        isDeathImageLoaded = true;
+    };
+    deathImage.onerror = () => {
+        console.error("Lỗi khi tải ảnh bach.jpeg. Sẽ dùng màu đen mặc định.");
+    };
+
+    const victoryImage = new Image();
+    victoryImage.src = 'bach2.png'; 
+    let isVictoryImageLoaded = false;
+    victoryImage.onload = () => {
+        isVictoryImageLoaded = true;
+    };
+    victoryImage.onerror = () => {
+        console.error("Lỗi khi tải ảnh bach2.png. Sẽ dùng màu đen mặc định.");
+    };
+
+    const shitImage = new Image();
+    shitImage.src = 'shit.png'; 
+    let isShitImageLoaded = false;
+    shitImage.onload = () => {
+        isShitImageLoaded = true;
+    };
+    shitImage.onerror = () => {
+        console.error("Lỗi khi tải ảnh shit.png. Sẽ dùng hình tròn màu xanh lục cho shit.");
+    };
+
+    const ducImage = new Image();
+    ducImage.src = 'duc.png';
+    let isDucImageLoaded = false;
+    ducImage.onload = () => {
+        isDucImageLoaded = true;
+    };
+    ducImage.onerror = () => {
+        console.error("Lỗi khi tải ảnh duc.png. Sẽ dùng hình tròn màu xanh dương mặc định cho player.");
+    };
+
+
+    const gameOverSound = new Audio('fart.mp3'); 
+    gameOverSound.volume = 0.5;
+    const shootSound = new Audio('vineboom.mp3'); 
+    shootSound.volume = 0.2;
+    const hitSound = new Audio('hit.mp3'); 
+    hitSound.volume = 0.3;
+
+    let gameLoopInterval;
+
+    const keys = {}; 
+    let joystickInput = { x: 0, y: 0 }; 
+    let isMobile = window.innerWidth <= 850; 
+    
+    const joystickContainer = document.getElementById('joystickContainer');
+    const joystick = document.getElementById('joystick');
+    let joystickMaxRadius;
+
+    let player; 
+    let bullets = [];
+    let ghosts = []; 
+    let score = 0;
+    let gameTimer = 0; 
+    let ghostSpawnTimer = 0; 
+    let isGameOver = false;
+
+
+    class Player {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.color = 'blue'; 
+            this.velocity = { x: 0, y: 0 };
+            this.health = PLAYER_MAX_HEALTH;
+            this.angle = 0; 
+            this.isShooting = false;
+            this.firingCooldown = 0;
+            this.invulTimer = 0; 
+            this.radius = PLAYER_RADIUS;
+            this.image = ducImage; 
+            this.imageWidth = PLAYER_RADIUS * 2; 
+            this.imageHeight = PLAYER_RADIUS * 2;
+        }
+
+        draw() {
+            ctx.font = '24px "VT323", monospace';
+            ctx.fillStyle = 'white';
+            ctx.fillText(`HP: ${this.health > 0 ? 1 : 0}`, 20, 35);
+            
+            if (isDucImageLoaded && this.image.complete && this.image.naturalWidth !== 0) {
+                ctx.drawImage(this.image, this.x - this.imageWidth / 2, this.y - this.imageHeight / 2, this.imageWidth, this.imageHeight);
+            } else {
+                ctx.fillStyle = this.invulTimer > 0 ? 'yellow' : this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.strokeStyle = 'gray';
+            ctx.lineWidth = 3;
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.angle);
+            ctx.beginPath();
+            ctx.moveTo(this.radius * 0.7, 0); 
+            ctx.lineTo(this.radius * 0.7 + 20, 0); 
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        update() {
+             if (isGameOver) return; 
+
+            let inputX = 0;
+            let inputY = 0;
+
+            if (isMobile) {
+                inputX = joystickInput.x;
+                inputY = joystickInput.y;
+                
+                if (inputX !== 0 || inputY !== 0) {
+                    this.angle = Math.atan2(inputY, inputX); 
+                }
+                
+            } else {
+                if (keys['a']) inputX -= 1;
+                if (keys['d']) inputX += 1;
+                if (keys['w']) inputY -= 1;
+                if (keys['s']) inputY += 1;
+                
+                const magnitude = Math.sqrt(inputX * inputX + inputY * inputY);
+                if (magnitude > 1) {
+                    inputX /= magnitude;
+                    inputY /= magnitude;
+                }
+            }
+
+            this.velocity.x = inputX * PLAYER_SPEED;
+            this.velocity.y = inputY * PLAYER_SPEED;
+
+            this.x += this.velocity.x;
+            this.y += this.velocity.y;
+
+            if (this.x - this.radius < 0) this.x = this.radius;
+            if (this.x + this.radius > CANVAS_WIDTH) this.x = CANVAS_WIDTH - this.radius;
+            if (this.y - this.radius < 0) this.y = this.radius;
+            if (this.y + this.radius > CANVAS_HEIGHT) this.y = CANVAS_HEIGHT - this.radius;
+
+            if (this.firingCooldown > 0) {
+                this.firingCooldown--;
+            }
+            
+            if (this.invulTimer > 0) {
+                this.invulTimer--;
+            }
+
+            if (this.isShooting && this.firingCooldown <= 0) {
+                let shotAngle = this.angle; 
+
+                bullets.push(new Bullet(this.x, this.y, shotAngle));
+                shootSound.currentTime = 0; 
+                shootSound.play();
+                this.firingCooldown = FIRING_COOLDOWN;
+            }
+        }
+
+        takeDamage(amount) {
+        }
+    }
+
+    class Bullet {
+        constructor(x, y, angle) {
+            this.x = x;
+            this.y = y;
+            this.radius = BULLET_RADIUS;
+            this.color = 'yellow';
+            this.velocity = {
+                x: BULLET_SPEED * Math.cos(angle),
+                y: BULLET_SPEED * Math.sin(angle)
+            };
+        }
+
+        draw() {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        update() {
+            this.x += this.velocity.x;
+            this.y += this.velocity.y;
+        }
+
+        isOffscreen() {
+            return this.x < 0 || this.x > CANVAS_WIDTH || this.y < 0 || this.y > CANVAS_HEIGHT;
+        }
+    }
+
+    class Ghost {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.radius = GHOST_RADIUS;
+            this.color = '#006400'; 
+            this.health = GHOST_HEALTH; 
+            this.directionAngle = Math.random() * Math.PI * 2; 
+            this.moveTimer = 0; 
+            this.maxMoveTimer = 60; 
+            this.image = shitImage; 
+            this.imageWidth = GHOST_RADIUS * 2; 
+            this.imageHeight = GHOST_RADIUS * 2;
+        }
+
+        draw() {
+            if (isShitImageLoaded && this.image.complete && this.image.naturalWidth !== 0) {
+                ctx.drawImage(this.image, this.x - this.imageWidth / 2, this.y - this.imageHeight / 2, this.imageWidth, this.imageHeight);
+            } else {
+                ctx.fillStyle = this.color; 
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        update(player) {
+            this.moveTimer++;
+            if (this.moveTimer >= this.maxMoveTimer) {
+                this.directionAngle = Math.random() * Math.PI * 2;
+                this.moveTimer = 0;
+            }
+
+            const vx = GHOST_SPEED * Math.cos(this.directionAngle);
+            const vy = GHOST_SPEED * Math.sin(this.directionAngle);
+
+            this.x += vx; 
+            this.y += vy;
+
+            if (this.x - this.radius < 0) {
+                this.x = this.radius;
+                this.directionAngle = Math.atan2(vy, -vx); 
+            }
+            if (this.x + this.radius > CANVAS_WIDTH) {
+                this.x = CANVAS_WIDTH - this.radius;
+                this.directionAngle = Math.atan2(vy, -vx); 
+            }
+            if (this.y - this.radius < 0) {
+                this.y = this.radius;
+                this.directionAngle = Math.atan2(-vy, vx); 
+            }
+            if (this.y + this.radius > CANVAS_HEIGHT) {
+                this.y = CANVAS_HEIGHT - this.radius;
+                this.directionAngle = Math.atan2(-vy, vx); 
+            }
+
+            const dx = player.x - this.x;
+            const dy = player.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < this.radius + player.radius) {
+            }
+            return false;
+        }
+
+        takeDamage(amount) {
+            this.health -= amount;
+            if (this.health <= 0) {
+                return true; 
+            }
+            return false;
+        }
+    }
+
+    player = new Player(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2); 
+
+    document.addEventListener('keydown', (event) => {
+        if (!isMobile) {
+            keys[event.key.toLowerCase()] = true;
+        }
+    });
+
+    document.addEventListener('keyup', (event) => {
+        if (!isMobile) {
+            keys[event.key.toLowerCase()] = false;
+        }
+    });
+
+    canvas.addEventListener('mousemove', (event) => {
+        if (!isMobile && !isGameOver) {
+            const rect = canvas.getBoundingClientRect();
+            const dx = event.clientX - rect.left - player.x; 
+            const dy = event.clientY - rect.top - player.y; 
+            player.angle = Math.atan2(dy, dx);
+        }
+    });
+
+    canvas.addEventListener('mousedown', (event) => {
+        if (!isMobile && event.button === 0 && !isGameOver) { 
+            player.isShooting = true;
+        }
+    });
+
+    canvas.addEventListener('mouseup', (event) => {
+        if (!isMobile && event.button === 0) {
+            player.isShooting = false;
+        }
+    });
+    
+    const fireButton = document.getElementById('fireButton');
+    
+    fireButton.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (!isGameOver) {
+            player.isShooting = true;
+            fireButton.style.backgroundColor = 'rgba(255, 0, 0, 1.0)';
+        }
+    });
+
+    fireButton.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        player.isShooting = false;
+        fireButton.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
+    });
+    
+    let isJoystickDragging = false;
+    let touchIdentifier = null;
+
+    function initJoystick() {
+        const rect = joystickContainer.getBoundingClientRect();
+        joystickMaxRadius = (rect.width / 2) - (joystick.offsetWidth / 2);
+        
+        joystick.style.transform = `translate(0px, 0px)`;
+        joystickInput = { x: 0, y: 0 };
+    }
+
+    joystickContainer.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (isJoystickDragging) return; 
+        
+        isJoystickDragging = true;
+        const touch = e.changedTouches[0];
+        touchIdentifier = touch.identifier;
+        
+        const rect = joystickContainer.getBoundingClientRect();
+        const touchX = touch.clientX - rect.left - rect.width / 2;
+        const touchY = touch.clientY - rect.top - rect.height / 2;
+
+        handleJoystickMove(touchX, touchY);
+    });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!isJoystickDragging) return;
+
+        let activeTouch = null;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === touchIdentifier) {
+                activeTouch = e.changedTouches[i];
+                break;
+            }
+        }
+        
+        if (activeTouch) {
+            e.preventDefault(); 
+            const rect = joystickContainer.getBoundingClientRect();
+            const touchX = activeTouch.clientX - rect.left - rect.width / 2;
+            const touchY = activeTouch.clientY - rect.top - rect.height / 2;
+            
+            handleJoystickMove(touchX, touchY);
+        }
+    });
+
+    document.addEventListener('touchend', (e) => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === touchIdentifier) {
+                isJoystickDragging = false;
+                touchIdentifier = null;
+                joystick.style.transform = `translate(0px, 0px)`; 
+                joystickInput = { x: 0, y: 0 }; 
+                break;
+            }
+        }
+    });
+
+    function handleJoystickMove(deltaX, deltaY) {
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+        if (distance > joystickMaxRadius) {
+            deltaX = deltaX / distance * joystickMaxRadius;
+            deltaY = deltaY / distance * joystickMaxRadius;
+        }
+
+        joystick.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+
+        joystickInput.x = deltaX / joystickMaxRadius;
+        joystickInput.y = deltaY / joystickMaxRadius;
+    }
+
+
+    function spawnGhost() {
+        let x, y;
+        const side = Math.floor(Math.random() * 4); 
+
+        if (side === 0) { x = Math.random() * CANVAS_WIDTH; y = -GHOST_RADIUS; } 
+        else if (side === 1) { x = CANVAS_WIDTH + GHOST_RADIUS; y = Math.random() * CANVAS_HEIGHT; } 
+        else if (side === 2) { x = Math.random() * CANVAS_WIDTH; y = CANVAS_HEIGHT + GHOST_RADIUS; } 
+        else { x = -GHOST_RADIUS; y = Math.random() * CANVAS_HEIGHT; } 
+        
+        ghosts.push(new Ghost(x, y));
+    }
+
+    function drawMap() {
+        if (isBackgroundLoaded) {
+            ctx.drawImage(backgroundImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        } else {
+            ctx.fillStyle = '#6B8E23'; 
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        }
+    }
+    
+    function checkGameStatus() {
+        if (gameTimer >= TIME_LIMIT_FRAMES) {
+            if (score < TARGET_SCORE) {
+                isGameOver = true;
+                gameOverSound.currentTime = 0;
+                gameOverSound.play(); 
+                drawGameOver(`Đức's Angry! You needed ${TARGET_SCORE} score.`, 'RED', true, false); 
+            } else {
+                isGameOver = true;
+                drawGameOver(`Đức's Happy! Score: ${score}`, 'GREEN', false, true); 
+            }
+            return true;
+        }
+        return false;
+    }
+
+    function drawGameOver(message, color = 'RED', showDeathImage = false, showVictoryImage = false) {
+        deathScreen.style.display = 'flex'; 
+
+        let imageUrl = 'none';
+        let backgroundOpacity = 'rgba(0, 0, 0, 0.8)';
+        
+        if (showDeathImage && isDeathImageLoaded) {
+            imageUrl = deathImage.src;
+            backgroundOpacity = 'rgba(0, 0, 0, 0.7)';
+        } else if (showVictoryImage && isVictoryImageLoaded) {
+            imageUrl = victoryImage.src;
+            backgroundOpacity = 'rgba(0, 0, 0, 0.7)';
+        } else {
+             deathScreen.style.backgroundImage = 'none';
+             deathScreen.style.backgroundColor = 'black'; 
+        }
+        
+        if (imageUrl !== 'none') {
+            deathScreen.style.backgroundImage = `url('${imageUrl}')`;
+            deathScreen.style.backgroundSize = 'cover'; 
+            deathScreen.style.backgroundPosition = 'center';
+            deathScreen.style.backgroundColor = backgroundOpacity; 
+        }
+
+        const finalMessage = message.includes('VICTORY') ? 'Đức Vui!' : 'Đức thành công ăn cứt !';
+
+        deathScreen.innerHTML = `
+            <div style="text-align: center; color: ${color}; font-family: 'VT323', monospace; background-color: rgba(0, 0, 0, 0.5); padding: 40px; border-radius: 10px; z-index: 201;">
+                <h1 style="font-size: 80px; margin-bottom: 20px; color: white;">${finalMessage}</h1>
+                <p style="font-size: 40px; color: ${color};">${message}</p>
+                <p style="font-size: 40px; color: white;">FINAL SCORE: ${score}</p>
+                <p style="font-size: 30px; margin-top: 30px; color: white;">Refresh to play again</p>
+            </div>
+        `;
+    }
+
+
+    function gameLoop() {
+        if (isGameOver) {
+            clearInterval(gameLoopInterval);
+            return;
+        }
+
+        gameTimer++;
+        const secondsLeft = Math.max(0, TIME_LIMIT - Math.floor(gameTimer / 60));
+
+        if (checkGameStatus()) return;
+
+
+        drawMap();
+
+        player.update();
+        player.draw();
+
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            const bullet = bullets[i];
+            bullet.update();
+            bullet.draw();
+
+            if (bullet.isOffscreen()) {
+                bullets.splice(i, 1);
+                continue;
+            }
+
+            let hit = false;
+            for (let j = ghosts.length - 1; j >= 0; j--) {
+                const ghost = ghosts[j];
+                const dx = bullet.x - ghost.x;
+                const dy = bullet.y - ghost.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < bullet.radius + ghost.radius) {
+                    bullets.splice(i, 1);
+                    hit = true;
+                    if (ghost.takeDamage(1)) { 
+                        ghosts.splice(j, 1);
+                        score++;
+                    }
+                    break; 
+                }
+            }
+            if (hit) continue; 
+        }
+
+        ghostSpawnTimer++;
+        if (ghostSpawnTimer >= GHOST_SPAWN_INTERVAL) {
+            spawnGhost();
+            ghostSpawnTimer = 0;
+        }
+
+        for (let i = ghosts.length - 1; i >= 0; i--) {
+            const ghost = ghosts[i];
+            
+            ghost.update(player);
+            ghost.draw();
+            
+            if (isGameOver) break;
+        }
+
+        ctx.font = '24px "VT323", monospace';
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'left';
+        ctx.fillText(`HP: ${player.health > 0 ? 1 : 0}`, 20, 35);
+        ctx.textAlign = 'center';
+        ctx.fillText(`TIME: ${secondsLeft}`, CANVAS_WIDTH / 2, 35);
+        ctx.textAlign = 'right';
+        ctx.fillText(`SCORE: ${score}/${TARGET_SCORE}`, CANVAS_WIDTH - 20, 35);
+    }
+    
+    
+    function startGame() {
+        document.getElementById('titleScreen').style.display = 'none';
+        deathScreen.style.display = 'none'; 
+        
+        isMobile = window.innerWidth <= 850;
+        if (isMobile) {
+            initJoystick();
+        } 
+        
+        player.x = CANVAS_WIDTH / 2;
+        player.y = CANVAS_HEIGHT / 2;
+        player.health = PLAYER_MAX_HEALTH;
+        player.angle = 0;
+        player.isShooting = false;
+        player.firingCooldown = 0;
+        player.invulTimer = 0;
+        bullets = [];
+        ghosts = []; 
+        score = 0;
+        gameTimer = 0;
+        ghostSpawnTimer = 0; 
+        isGameOver = false;
+        joystickInput = { x: 0, y: 0 };
+        isJoystickDragging = false;
+        
+        gameLoopInterval = setInterval(gameLoop, 1000 / 60);
+    }
+
+</script>
+</body>
+</html>
